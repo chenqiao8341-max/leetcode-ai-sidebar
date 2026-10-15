@@ -1,0 +1,40 @@
+:root,[data-theme="light"] {
+  color-scheme:light;
+  --bg:#f8f9fc;--card:#ffffff;--line:#e2e6ef;--text:#252936;
+  --muted:#687287;--accent:#4968df;--warning:#99601e;--code-bg:#f4f6fa;
+  --on-accent:#ffffff;--accent-hover:#3d5acd;--soft:#edf0f7;--soft-hover:#e5e9f3;
+  --accent-soft:#eef2ff;--accent-line:#c4d0ef;--accent-muted:#586fb0;
+  --strong:#202738;--secondary-text:#4f5b72;--code-text:#4b5875;
+  --subtle-text:#747d90;--placeholder:#7c869a;--surface-subtle:#f5f7fb;
+  --bubble:#eef1fa;--bubble-text:#495269;--shadow:#28395b0a;--focus-ring:#4968df22;
+}
+[data-theme="dark"] {
+  color-scheme:dark;
+  --bg:#17191e;--card:#202329;--line:#383d49;--text:#f0f1f5;
+  --muted:#acb4c5;--accent:#a5b7ff;--warning:#e7bc7e;--code-bg:#191c22;
+  --on-accent:#172248;--accent-hover:#bdcaff;--soft:#2b303c;--soft-hover:#363d4c;
+  --accent-soft:#29334d;--accent-line:#64769f;--accent-muted:#b4c4ee;
+  --strong:#ffffff;--secondary-text:#d5dbe7;--code-text:#d0dcf6;
+  --subtle-text:#a4afc2;--placeholder:#a0aabc;--surface-subtle:#252932;
+  --bubble:#30384c;--bubble-text:#e3e9fa;--shadow:#00000024;--focus-ring:#a5b7ff30;
+}
+[data-theme="warm"] {
+  color-scheme:light;
+  --bg:#f8f4ed;--card:#fffcf7;--line:#e7ddd0;--text:#39312b;
+  --muted:#7c6e60;--accent:#986044;--warning:#94601e;--code-bg:#f3ece3;
+  --on-accent:#ffffff;--accent-hover:#7e4b33;--soft:#eee6da;--soft-hover:#e5d9c9;
+  --accent-soft:#f2e5d9;--accent-line:#cfab90;--accent-muted:#885e42;
+  --strong:#312820;--secondary-text:#655344;--code-text:#70553c;
+  --subtle-text:#827264;--placeholder:#8b7b6c;--surface-subtle:#f6eee4;
+  --bubble:#f0e5d8;--bubble-text:#65503e;--shadow:#6544260a;--focus-ring:#98604425;
+}
+[data-theme="lavender"] {
+  color-scheme:light;
+  --bg:#f6f4fb;--card:#fefcff;--line:#e4dff0;--text:#332d44;
+  --muted:#776b8a;--accent:#7953b3;--warning:#99601e;--code-bg:#f0ecf7;
+  --on-accent:#ffffff;--accent-hover:#65409d;--soft:#eee8f6;--soft-hover:#e4daf0;
+  --accent-soft:#eee6fa;--accent-line:#c6b2e2;--accent-muted:#795a9b;
+  --strong:#2c233c;--secondary-text:#665775;--code-text:#6a5187;
+  --subtle-text:#80728f;--placeholder:#867995;--surface-subtle:#f4eff9;
+  --bubble:#eee5f7;--bubble-text:#634b7c;--shadow:#4b2a6b0a;--focus-ring:#7953b325;
+}

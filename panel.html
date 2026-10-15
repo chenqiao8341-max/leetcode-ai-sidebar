@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>力扣伴读</title><script src="theme-boot.js"></script><link rel="stylesheet" href="themes.css"><link rel="stylesheet" href="vendor/katex.min.css"><link rel="stylesheet" href="panel.css"></head>
+<body>
+  <header><div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m8 6-5 6 5 6M16 6l5 6-5 6M14 4l-4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><strong>力扣伴读</strong><span class="subtitle">一点提示，多一点理解。</span></div></div><button id="settings-toggle" class="icon-button" aria-label="打开设置" title="设置" aria-haspopup="dialog" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="9" cy="7" r="3" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/><circle cx="16" cy="17" r="3" fill="var(--card)" stroke="currentColor" stroke-width="1.6"/></svg><span>设置</span></button></header>
+  <main>
+
+
+    <section class="card context-card" aria-label="当前页面上下文">
+      <div class="section-head"><span class="eyebrow"><span id="status-dot" class="dot"></span> 当前上下文</span><button id="refresh" class="text-button">刷新</button></div>
+      <h1 id="problem-title">打开一道力扣题目</h1>
+      <div class="context-tags"><span id="source-tag" class="tag">等待连接</span><span id="position-tag" class="tag">未定位</span></div>
+      <p id="reference" class="reference">在代码中选中一段内容，再来问我。</p>
+      <p id="context-warning" class="warning" hidden></p>
+      <details><summary>查看将发送的上下文</summary><pre id="context-preview">尚无页面内容。</pre></details>
+      <details id="manual-details"><summary>手动提供完整代码</summary><p class="tiny">自动读取不完整时，可在力扣编辑器中 Ctrl+A、Ctrl+C，再粘贴到这里。手动代码按题目保存。</p><textarea id="manual-code" rows="7" spellcheck="false" placeholder="粘贴完整代码…"></textarea><label class="check"><input id="use-manual" type="checkbox">本题使用上面的手动代码</label><p class="tiny">启用后不会随网页代码自动更新，也不会沿用网页光标。</p></details>
+    </section>
+
+    <section class="conversation" aria-label="与 AI 对话">
+      <div id="away-banner" class="away-banner" hidden>网页读取已暂停，对话和草稿已保留。回到题目页即可继续提问。</div>
+      <div class="section-head"><div><h2>一起推敲</h2><span id="save-state" class="save-state" role="status">按题目保存对话</span></div><button id="clear-chat" class="text-button">清空本题对话</button></div>
+      <div id="messages" aria-live="polite" aria-relevant="additions text">
+        <div id="welcome" class="welcome"><span class="spark" aria-hidden="true">✦</span><p>从你卡住的那一行开始。</p><span>选中一段代码，或直接提问。<br>我们一步一步想明白。</span></div>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <div class="suggestions"><button data-question="请解释我选中的代码；若没有选区，解释光标所在行。">解释这里</button><button data-question="给我一个下一步的小提示，不要直接给完整答案。" data-mode="hint">给个提示</button><button data-question="分析当前代码的时间和空间复杂度。" data-mode="complexity">分析复杂度</button></div>
+    <form id="ask-form"><label class="sr-only" for="question">你的问题</label><textarea id="question" rows="3" maxlength="8000" placeholder="比如：这里为什么要 path.pop()？"></textarea><div class="compose-bottom"><select id="mode" aria-label="教学方式"><option value="explain">解释代码</option><option value="hint">启发提示</option><option value="debug">排查问题</option><option value="complexity">复杂度</option></select><span class="shortcut">Ctrl + Enter</span><button id="stop" type="button" class="secondary" hidden>停止</button><button id="send" type="submit" class="primary">发送 ↑</button></div></form>
+    <p id="status" class="status" role="status">先打开设置，填写 DeepSeek API Key。</p>
+    <p class="privacy">发送时将本题上下文与最近对话交给 DeepSeek · 按 API 用量计费</p>
+  </footer>
+
+  <dialog id="settings" class="settings" aria-labelledby="settings-title">
+    <div class="settings-heading"><div><h2 id="settings-title">设置</h2><p>让伴读更适合你。</p></div><button id="settings-close" class="icon-button" aria-label="关闭设置" title="返回对话">×</button></div>
+    <div class="settings-tabs" role="tablist" aria-label="设置分类">
+      <button id="tab-appearance" role="tab" aria-selected="true" aria-controls="section-appearance" data-settings-tab="appearance">外观</button>
+      <button id="tab-model" role="tab" aria-selected="false" aria-controls="section-model" tabindex="-1" data-settings-tab="model">模型</button>
+      <button id="tab-teaching" role="tab" aria-selected="false" aria-controls="section-teaching" tabindex="-1" data-settings-tab="teaching">教学</button>
+      <button id="tab-about" role="tab" aria-selected="false" aria-controls="section-about" tabindex="-1" data-settings-tab="about">关于</button>
+    </div>
+    <div class="settings-content">
+      <section id="section-appearance" role="tabpanel" aria-labelledby="tab-appearance">
+        <h3>界面风格</h3><p class="muted">选择即刻生效，自动保存在这台电脑上。</p>
+        <fieldset class="theme-grid"><legend class="sr-only">选择主题</legend>
+          <label class="theme-choice"><input type="radio" name="theme" value="light" checked><span class="theme-card" data-palette="light"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i></span><strong>清透浅色</strong><small>明亮 · 简洁</small></span></label>
+          <label class="theme-choice"><input type="radio" name="theme" value="dark"><span class="theme-card" data-palette="dark"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i></span><strong>石墨深色</strong><small>深灰背景 · 白色文字</small></span></label>
+          <label class="theme-choice"><input type="radio" name="theme" value="warm"><span class="theme-card" data-palette="warm"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i></span><strong>暖纸阅读</strong><small>米白 · 暖棕</small></span></label>
+          <label class="theme-choice"><input type="radio" name="theme" value="lavender"><span class="theme-card" data-palette="lavender"><span class="theme-preview" aria-hidden="true"><i></i><i></i><i></i></span><strong>雾紫柔光</strong><small>淡紫 · 柔和</small></span></label>
+          <label class="theme-choice theme-system"><input type="radio" name="theme" value="system"><span class="theme-card"><strong>跟随系统</strong><small>随系统自动切换浅色 / 深色</small></span></label>
+        </fieldset>
+        <p id="appearance-status" class="tiny" role="status">外观独立保存，不影响模型设置和已有对话。</p>
+      </section>
+      <section id="section-model" role="tabpanel" aria-labelledby="tab-model" hidden>
+        <h3>连接 DeepSeek</h3><p class="muted">只在发送问题时上传上下文。接口为 api.deepseek.com。</p>
+        <label for="api-key">API Key</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="在这里输入密钥，不要发到聊天里">
+        <label class="check"><input type="checkbox" id="remember-key">在这台电脑上记住密钥</label>
+        <p class="tiny">默认仅本次浏览器会话保存。勾选后保存在扩展本地存储，不同步到云端；本地存储不是加密保险库。</p>
+        <label for="model">模型名称</label><div class="inline"><input id="model" list="model-list" spellcheck="false"><button id="load-models" type="button" class="secondary">获取列表</button></div><datalist id="model-list"><option value="deepseek-flash"><option value="deepseek-v4-pro"></datalist>
+        <label class="check"><input type="checkbox" id="thinking">深度思考（回答会更慢）</label>
+        <div class="button-row"><button id="forget-key" class="text-button">清除密钥</button><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">获取 API Key ↗</a></div>
+      </section>
+      <section id="section-teaching" role="tabpanel" aria-labelledby="tab-teaching" hidden>
+        <h3>你的教学规则</h3><p class="muted">例如只给下一步提示、用具体例子演示，或先分析再给代码。</p>
+        <label for="system-prompt">系统提示词</label><textarea id="system-prompt" rows="12"></textarea>
+        <button id="reset-prompt" class="secondary">恢复默认提示词</button>
+      </section>
+      <section id="section-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+        <h3>力扣伴读 <span class="version-tag">0.4.0</span></h3><p class="muted">一点提示，多一点理解。</p>
+        <div class="about-item"><strong>对话保存在本机</strong><p>按题目分别保存消息和草稿，切换网页不会清空。发送时附带最新题目内容与最近 4 轮有效对话。</p></div>
+        <div class="about-item"><strong>Markdown 与数学公式</strong><p>渲染库和字体随插件打包，无需额外连接外部 CDN。</p></div>
+        <div class="about-item"><strong>统一设置入口</strong><p>外观、模型与教学偏好都集中在这里，后续功能也会按类别加入。</p></div>
+      </section>
+    </div>
+    <div class="settings-bottom"><p id="settings-status" class="tiny" role="status"></p><div class="button-row"><button id="settings-done" class="secondary">返回对话</button><button id="save-settings" class="primary" hidden>保存模型与教学设置</button></div></div>
+  </dialog>
+  <script type="module" src="panel.mjs"></script>
+</body></html>

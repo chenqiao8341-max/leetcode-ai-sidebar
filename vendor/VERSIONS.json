@@ -1,0 +1,12 @@
+{
+  "markdown-it": {
+    "version": "15.0.2",
+    "source": "https://registry.npmmirror.com/markdown-it",
+    "integrity": "sha512-q4IGxMv56jCqT4OCRCADBoDP3LO4MhmTXjFbphHPXs4g3j9Xg5RDnxqN8IF/3vIWEU+VCnUq+7JUg/cfy2E6Qw=="
+  },
+  "katex": {
+    "version": "0.19.0",
+    "source": "https://registry.npmmirror.com/katex",
+    "integrity": "sha512-v6Tznz3zJ7u3niRCoDTsumM2+HA2XXcCu+WAacCeHD2z3p9A9Ks987o5FzfTGBN0e8A0vjEgIDvLbICrXpdw/Q=="
+  }
+}
