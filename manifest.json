@@ -1,16 +1,56 @@
 {
   "manifest_version": 3,
-  "name": "力扣伴读 · DeepSeek",
-  "version": "0.4.0",
-  "description": "结合当前力扣题目、代码和选区，在 Edge 侧栏与 DeepSeek 讨论算法。",
-  "permissions": ["storage", "sidePanel", "activeTab"],
-  "host_permissions": ["https://leetcode.cn/*", "https://leetcode.com/*", "https://api.deepseek.com/*"],
-  "background": {"service_worker": "background.js"},
-  "action": {"default_title": "打开力扣伴读"},
-  "side_panel": {"default_path": "panel.html"},
-  "content_scripts": [
-    {"matches": ["https://leetcode.cn/problems/*", "https://leetcode.com/problems/*"], "js": ["page-bridge.js"], "run_at": "document_start", "world": "MAIN"},
-    {"matches": ["https://leetcode.cn/problems/*", "https://leetcode.com/problems/*"], "js": ["content.js"], "run_at": "document_idle"}
+  "name": "力扣伴读 · AI Sidebar",
+  "version": "0.5.0",
+  "description": "结合当前力扣题目、代码和选区，使用自定义 API 或 ChatGPT 订阅讨论算法。",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab"
   ],
-  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src https://api.deepseek.com"}
+  "host_permissions": [
+    "https://leetcode.cn/*",
+    "https://leetcode.com/*",
+    "https://api.deepseek.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "打开力扣伴读"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://leetcode.cn/problems/*",
+        "https://leetcode.com/problems/*"
+      ],
+      "js": [
+        "page-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://leetcode.cn/problems/*",
+        "https://leetcode.com/problems/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https: http://127.0.0.1:* http://localhost:*"
+  }
 }

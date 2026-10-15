@@ -27,8 +27,8 @@
   <footer>
     <div class="suggestions"><button data-question="请解释我选中的代码；若没有选区，解释光标所在行。">解释这里</button><button data-question="给我一个下一步的小提示，不要直接给完整答案。" data-mode="hint">给个提示</button><button data-question="分析当前代码的时间和空间复杂度。" data-mode="complexity">分析复杂度</button></div>
     <form id="ask-form"><label class="sr-only" for="question">你的问题</label><textarea id="question" rows="3" maxlength="8000" placeholder="比如：这里为什么要 path.pop()？"></textarea><div class="compose-bottom"><select id="mode" aria-label="教学方式"><option value="explain">解释代码</option><option value="hint">启发提示</option><option value="debug">排查问题</option><option value="complexity">复杂度</option></select><span class="shortcut">Ctrl + Enter</span><button id="stop" type="button" class="secondary" hidden>停止</button><button id="send" type="submit" class="primary">发送 ↑</button></div></form>
-    <p id="status" class="status" role="status">先打开设置，填写 DeepSeek API Key。</p>
-    <p class="privacy">发送时将本题上下文与最近对话交给 DeepSeek · 按 API 用量计费</p>
+    <p id="status" class="status" role="status">先打开设置，配置模型连接。</p>
+    <p id="connection-summary" class="privacy">发送时将本题上下文与最近对话交给已选服务商。</p>
   </footer>
 
   <dialog id="settings" class="settings" aria-labelledby="settings-title">
@@ -52,13 +52,34 @@
         <p id="appearance-status" class="tiny" role="status">外观独立保存，不影响模型设置和已有对话。</p>
       </section>
       <section id="section-model" role="tabpanel" aria-labelledby="tab-model" hidden>
-        <h3>连接 DeepSeek</h3><p class="muted">只在发送问题时上传上下文。接口为 api.deepseek.com。</p>
+        <h3>模型连接</h3><p class="muted">选择连接方式。切换模型不会清空本题对话。</p>
+        <label for="connection-type">连接方式</label><select id="connection-type"><option value="api">API 连接</option><option value="plan">ChatGPT 订阅</option></select>
+        <div id="api-fields">
+        <label for="connection-profile">已保存的 API</label><div class="inline"><select id="connection-profile"></select><button id="new-connection" class="secondary" type="button">新增</button></div>
+        <label for="connection-name">连接名称</label><input id="connection-name" maxlength="80" placeholder="例如：DeepSeek / 我的 API">
+        <label for="api-url">API URL</label><input id="api-url" type="url" spellcheck="false" placeholder="https://api.example.com/v1">
+        <p class="tiny">填写服务商提供的基础地址（包括 /v1 等路径）。修改地址后请重新填写密钥。</p>
         <label for="api-key">API Key</label><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="在这里输入密钥，不要发到聊天里">
         <label class="check"><input type="checkbox" id="remember-key">在这台电脑上记住密钥</label>
-        <p class="tiny">默认仅本次浏览器会话保存。勾选后保存在扩展本地存储，不同步到云端；本地存储不是加密保险库。</p>
-        <label for="model">模型名称</label><div class="inline"><input id="model" list="model-list" spellcheck="false"><button id="load-models" type="button" class="secondary">获取列表</button></div><datalist id="model-list"><option value="deepseek-flash"><option value="deepseek-v4-pro"></datalist>
-        <label class="check"><input type="checkbox" id="thinking">深度思考（回答会更慢）</label>
-        <div class="button-row"><button id="forget-key" class="text-button">清除密钥</button><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">获取 API Key ↗</a></div>
+        <p class="tiny">默认仅本次浏览器会话保存；本地模型可留空。各 API 的密钥分别保存，不使用云同步。</p>
+        <label for="api-protocol">接口格式</label><select id="api-protocol"><option value="chat">OpenAI 兼容 · Chat Completions</option><option value="responses">OpenAI Responses</option></select>
+        <label for="model-list">选择模型</label><div class="inline"><select id="model-list"><option value="">先获取模型列表</option></select><button id="load-models" type="button" class="secondary">获取模型</button></div>
+        <label for="model">模型 ID（也可手动填写）</label><input id="model" spellcheck="false" placeholder="服务商提供的模型 ID">
+        <label id="thinking-field" class="check"><input type="checkbox" id="thinking">DeepSeek 深度思考</label>
+        <div class="button-row"><button id="forget-key" class="text-button">清除此 API 的密钥</button></div>
+        </div>
+        <div id="plan-fields" hidden>
+          <p class="tiny">使用你授权的 ChatGPT 套餐与账号可用模型。需要先运行随扩展提供的本地连接程序。</p>
+          <details><summary>首次连接方法</summary><p class="tiny">安装 Node.js 24.5 或更新版本；双击扩展目录中的 companion/start.cmd，并保持窗口运行。复制窗口中的本地连接码到下方，再点击登录。账号密码只在 OpenAI 官方页面填写。</p></details>
+          <label for="plan-key">本地连接码</label><input id="plan-key" type="password" autocomplete="off" spellcheck="false" placeholder="由本地连接程序显示，不是 API Key">
+          <label class="check"><input type="checkbox" id="remember-plan-key">在这台电脑上记住连接码</label>
+          <div class="button-row"><button id="plan-login" class="primary" type="button">Continue with ChatGPT</button><button id="plan-status" class="secondary" type="button">刷新登录状态</button></div>
+          <p id="plan-notice" class="tiny" role="status">尚未连接本地程序。</p>
+          <label for="plan-account">ChatGPT 账号</label><select id="plan-account"><option value="">登录后选择</option></select>
+          <div class="button-row"><button id="plan-add" class="text-button" type="button">添加账号</button><button id="plan-cancel" class="text-button" type="button">取消等待登录</button><button id="plan-logout" class="text-button" type="button">退出所选账号</button></div>
+          <label for="plan-model">套餐模型</label><div class="inline"><select id="plan-model"><option value="">登录后获取模型</option></select><button id="plan-models" class="secondary" type="button">刷新模型</button></div>
+          <p class="tiny">可用模型、额度和权限由 OpenAI 账号决定。保存后发送的题目与对话将交给所选账号。<a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">管理用量 ↗</a></p>
+        </div>
       </section>
       <section id="section-teaching" role="tabpanel" aria-labelledby="tab-teaching" hidden>
         <h3>你的教学规则</h3><p class="muted">例如只给下一步提示、用具体例子演示，或先分析再给代码。</p>
@@ -66,7 +87,7 @@
         <button id="reset-prompt" class="secondary">恢复默认提示词</button>
       </section>
       <section id="section-about" role="tabpanel" aria-labelledby="tab-about" hidden>
-        <h3>力扣伴读 <span class="version-tag">0.4.0</span></h3><p class="muted">一点提示，多一点理解。</p>
+        <h3>力扣伴读 <span class="version-tag">0.5.0</span></h3><p class="muted">一点提示，多一点理解。</p>
         <div class="about-item"><strong>对话保存在本机</strong><p>按题目分别保存消息和草稿，切换网页不会清空。发送时附带最新题目内容与最近 4 轮有效对话。</p></div>
         <div class="about-item"><strong>Markdown 与数学公式</strong><p>渲染库和字体随插件打包，无需额外连接外部 CDN。</p></div>
         <div class="about-item"><strong>统一设置入口</strong><p>外观、模型与教学偏好都集中在这里，后续功能也会按类别加入。</p></div>

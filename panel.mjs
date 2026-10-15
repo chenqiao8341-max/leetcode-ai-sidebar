@@ -1,10 +1,11 @@
-import {API_ROOT, DEFAULT_MODEL, DEFAULT_PROMPT, validProblem, problemKey, effectiveSnapshot, contextText, makeMessages, consumeSSE, errorMessage} from './core.mjs';
+import {DEFAULT_PROMPT, validProblem, problemKey, effectiveSnapshot, contextText, makeMessages} from './core.mjs';
 import {renderMessage as renderText, enableCodeCopy} from './render.mjs';
 import {ConversationStore, emptyConversation} from './conversations.mjs';
 import {initializeAppearance} from './appearance.mjs';
+import {initializeModelSettings} from './model-settings.mjs';
 const $ = id => document.getElementById(id);
-let settings = {model: DEFAULT_MODEL, prompt: DEFAULT_PROMPT, thinking: false};
-let apiKey = '', snapshot = null, activeIdentity = '', history = [], controller = null, refreshPromise = null, busy = false;
+let settings = {prompt: DEFAULT_PROMPT}, modelUI;
+let snapshot = null, activeIdentity = '', history = [], controller = null, refreshPromise = null, busy = false;
 let windowId, operation = 0, contextError = '';
 let current = emptyConversation(), attached = false, pendingAnswer = null, lastProgressSave = 0, loadFailed = false;
 const store = new ConversationStore(chrome.storage.local);
@@ -28,7 +29,7 @@ function status(text, error = false) { $('status').textContent = text; $('status
 function addMessage(role, text, reference = '', record = null) {
   $('welcome')?.remove();
   const article = document.createElement('article'); article.className = `message ${role}`;
-  const who = document.createElement('div'); who.className = 'who'; who.textContent = role === 'user' ? '你' : 'DEEPSEEK · 伴读';
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = role === 'user' ? '你' : record?.modelLabel || 'AI · 伴读';
   if (reference) {const ref = document.createElement('span'); ref.textContent = '· ' + reference; who.append(ref);}
   const body = document.createElement('div'); body.className = 'body'; renderText(body, text);
   article.append(who, body); $('messages').append(article);
@@ -136,44 +137,24 @@ async function refresh() {
   return refreshPromise;
 }
 async function saveSettings() {
-  const key = $('api-key').value.trim();
-  const model = $('model').value.trim();
-  if (!model || !/^[a-zA-Z0-9_.:/-]{1,100}$/.test(model)) { $('settings-status').textContent = '请填写有效的模型名称。'; return; }
-  if (key && /\s/.test(key)) { $('settings-status').textContent = '密钥中不能含有空白字符。'; return; }
-  settings = {model, prompt: $('system-prompt').value.trim() || DEFAULT_PROMPT, thinking: $('thinking').checked};
+  if(busy){$('settings-status').textContent='请等待当前回答结束，或先停止生成，再切换连接。';return;}
+  $('save-settings').disabled=true;
   try {
-    await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
-    await chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
-    await chrome.storage.local.set({settings, rememberKey: $('remember-key').checked});
-    if ($('remember-key').checked) {await chrome.storage.local.set({apiKey:key}); await chrome.storage.session.remove('apiKey');}
-    else {await chrome.storage.session.set({apiKey:key}); await chrome.storage.local.remove('apiKey');}
-    apiKey = key; $('settings-status').textContent = '已保存。';
-    status(key ? '已配置 DeepSeek，可以提问了。' : '请填写 API Key 后保存。', !key);
-  } catch { $('settings-status').textContent = '保存失败，请重新打开扩展后重试。'; }
-}
-async function loadModels() {
-  const key = $('api-key').value.trim();
-  if (!key) {$('settings-status').textContent = '先填写 API Key，再获取模型列表。'; return;}
-  $('load-models').disabled = true; $('settings-status').textContent = '正在读取你可用的模型…';
-  try {
-    const res = await fetch(`${API_ROOT}/models`, {headers:{Authorization:`Bearer ${key}`}, signal:AbortSignal.timeout(20000), credentials:'omit', redirect:'error'});
-    if (!res.ok) throw new Error(errorMessage(res.status));
-    const data = await res.json();
-    const models = (data.data || []).map(x => x.id).filter(x => typeof x === 'string' && /^[a-zA-Z0-9_.:/-]{1,100}$/.test(x));
-    if (!models.length) throw new Error('接口没有返回模型列表。');
-    $('model-list').replaceChildren(...models.map(name => {const option = document.createElement('option'); option.value = name; return option;}));
-    if (!models.includes($('model').value)) $('model').value = models[0];
-    $('settings-status').textContent = `可用模型：${models.join('、')}。保存设置后生效。`;
-  } catch (e) { $('settings-status').textContent = e.name === 'TimeoutError' ? '连接超时，请检查网络后重试。' : e instanceof TypeError ? '无法连接 DeepSeek，请检查网络。' : e.message; }
-  finally { $('load-models').disabled = false; }
+    await modelUI.save();
+    settings={prompt:$('system-prompt').value.trim() || DEFAULT_PROMPT};
+    await chrome.storage.local.set({settings});
+    $('settings-status').textContent='已保存并启用所选连接。';status('模型连接已更新，可以提问。');
+  }catch(e){$('settings-status').textContent=e.message || '保存失败，请重试。';}
+  finally{$('save-settings').disabled=false;}
 }
 async function ask(event) {
   event.preventDefault();
   if (busy) return;
   const question = $('question').value.trim(); if (!question) return;
   const originIdentity=activeIdentity;
-  if (!apiKey) {openSettings('model');$('api-key').focus();status('请先填写并保存 API Key。',true);return;}
   setBusy(true);
+  let connection;
+  try{connection=await modelUI.snapshot();}catch(e){setBusy(false);openSettings('model');status(e.message,true);return;}
   // setIdentity may clear a previous conversation during refresh; lock again afterward.
   const okay = await refresh();
   if (!okay || !attached) {setBusy(false); status(loadFailed?'读取记录失败，请重新打开侧栏。':contextError || '页面已切换，请重试。', true); return;}
@@ -185,6 +166,7 @@ async function ask(event) {
   const messages = makeMessages(s, question, history, settings.prompt, $('mode').value);
   setBusy(true); addMessage('user', question, positionLabel(s)); $('question').value = '';
   const answer = addMessage('assistant', '正在阅读代码…');
+  answer.record.modelLabel=connection.label;answer.article.querySelector('.who').textContent=connection.label;
   answer.record.text='';answer.record.pending=true;pendingAnswer=answer.record;
   await persistCurrent();
   answer.article.scrollIntoView({block:'nearest', behavior:'smooth'});
@@ -192,23 +174,16 @@ async function ask(event) {
   const aborter = new AbortController(); controller = aborter;
   let text = '', timedOut = false, renderTimer = null;
   const timeout = setTimeout(() => {timedOut = true; aborter.abort();}, 240000);
-  status('正在连接 DeepSeek…');
+  status('正在连接 '+connection.label+'…');
   try {
-    const res = await fetch(`${API_ROOT}/chat/completions`, {
-      method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${apiKey}`},
-      body:JSON.stringify({model:settings.model, messages, stream:true, max_tokens:settings.thinking ? 16000 : 4096, thinking:{type:settings.thinking ? 'enabled' : 'disabled'}}),
-      signal:aborter.signal, credentials:'omit', redirect:'error'
-    });
-    if (!res.ok) throw new Error(errorMessage(res.status));
-    if (!res.body || !res.headers.get('content-type')?.includes('text/event-stream')) throw new Error('接口没有返回预期的数据流，请检查模型设置。');
-    const result = await consumeSSE(res.body, (delta, meta) => {
+    const result = await connection.generate(messages, (delta, meta) => {
       if (myOperation !== operation) return;
       text += delta;
       answer.record.text=text;
       if(Date.now()-lastProgressSave>1000){lastProgressSave=Date.now();persistCurrent();}
-      status(meta.reasoning && !text ? 'DeepSeek 正在思考…' : '正在回答…');
+      status(meta.reasoning && !text ? '模型正在思考…' : '正在回答…');
       if (!renderTimer) {
-        renderTimer = setTimeout(() => {renderTimer = null; if (myOperation === operation) renderText(answer.body, text || 'DeepSeek 正在思考…');},100);
+        renderTimer = setTimeout(() => {renderTimer = null; if (myOperation === operation) renderText(answer.body, text || '模型正在思考…');},100);
       }
     }, aborter.signal);
     if (myOperation !== operation || identity !== activeIdentity) return;
@@ -221,7 +196,7 @@ async function ask(event) {
     else status('回答完成。修改代码后，可以直接继续提问。');
   } catch (e) {
     if (myOperation !== operation) return;
-    const message = e.name === 'AbortError' ? timedOut ? '等待超过 4 分钟，已停止。请稍后重试。' : '已停止生成。' : e instanceof TypeError ? '无法连接 DeepSeek，请检查网络连接后重试。' : e.message;
+    const message = e.name === 'AbortError' ? timedOut ? '等待超过 4 分钟，已停止。请稍后重试。' : '已停止生成。' : e instanceof TypeError ? '无法连接所选服务，请检查 API 地址、网络或本地连接程序。' : e.message;
     renderText(answer.body, text || message);
     answer.record.text=text || message;answer.record.pending=false;pendingAnswer=null;
     if (text) {answer.record.note=message + ' 当前回答不完整，未加入后续对话上下文。';note(answer.article,answer.record.note);}
@@ -239,10 +214,10 @@ async function initialize() {
   enableCodeCopy($('messages'));
   windowId = (await chrome.windows.getCurrent()).id;
   await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
-  const [local, session] = await Promise.all([chrome.storage.local.get(['settings','apiKey','rememberKey']), chrome.storage.session.get(['apiKey',`lastProblem:${windowId}`])]);
-  settings = {...settings, ...local.settings}; apiKey = local.rememberKey ? local.apiKey || '' : session.apiKey || '';
-  $('api-key').value = apiKey; $('remember-key').checked = !!local.rememberKey;
-  $('model').value = settings.model; $('system-prompt').value = settings.prompt; $('thinking').checked = settings.thinking;
+  const [local, session] = await Promise.all([chrome.storage.local.get('settings'), chrome.storage.session.get(`lastProblem:${windowId}`)]);
+  settings.prompt=local.settings?.prompt || DEFAULT_PROMPT;
+  $('system-prompt').value=settings.prompt;
+  modelUI=await initializeModelSettings();
   $('settings-toggle').addEventListener('click',()=>openSettings());
   $('settings-close').addEventListener('click',()=>$('settings').close());
   $('settings-done').addEventListener('click',()=>$('settings').close());
@@ -260,11 +235,9 @@ async function initialize() {
       event.preventDefault();selectSettingsTab(tabs[next].dataset.settingsTab);tabs[next].focus();
     });
   });
-  if(!apiKey)openSettings('model');
+  if(!modelUI.configured)openSettings('model');
   $('save-settings').addEventListener('click', saveSettings);
-  $('load-models').addEventListener('click', loadModels);
   $('reset-prompt').addEventListener('click', () => {$('system-prompt').value = DEFAULT_PROMPT; $('settings-status').textContent = '已恢复默认规则，点击保存后生效。';});
-  $('forget-key').addEventListener('click', async () => {await Promise.all([chrome.storage.local.remove('apiKey'),chrome.storage.session.remove('apiKey')]); apiKey = ''; $('api-key').value = ''; $('settings-status').textContent = '密钥已清除。'; status('请重新填写 API Key。');});
   $('refresh').addEventListener('click', async () => {const ok = await refresh(); status(ok ? '已获取最新页面内容。' : contextError, !ok);});
   $('manual-code').addEventListener('input',()=>{renderContext();persistCurrent();});$('use-manual').addEventListener('change',()=>{renderContext();persistCurrent();});
   $('question').addEventListener('input',()=>persistCurrent());$('mode').addEventListener('change',()=>persistCurrent());
@@ -279,7 +252,7 @@ async function initialize() {
   document.addEventListener('visibilitychange',()=>{if(document.hidden)persistCurrent();else refresh();});
   chrome.tabs.onActivated?.addListener(()=>refresh());
   await refresh();
-  if (apiKey) status(snapshot ? '已连接页面读取功能，可以提问。' : contextError, !snapshot);
+  if (modelUI.configured) status(snapshot ? '已连接页面读取功能，可以提问。' : contextError, !snapshot);
   setInterval(refresh, 1800);
 }
 initialize().catch(() => status('扩展初始化失败，请关闭侧栏再重新打开。', true));

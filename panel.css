@@ -49,6 +49,7 @@ footer{padding:18px 17px 11px;background:linear-gradient(transparent,var(--bg) 1
 @media(max-width:350px){header{padding:15px}main{padding:12px 11px 0}footer{padding:18px 11px 9px}.card{padding:13px}}
 /* Unified settings dialog. Theme palettes live in themes.css. */
 #settings-toggle{width:auto;display:flex;gap:6px;font-size:11px}
+.inline select{min-width:0;flex:1}.inline button{flex-shrink:0}#connection-summary{overflow-wrap:anywhere}#plan-login{font-size:12px}#api-fields,#plan-fields{padding-bottom:10px}
 body:has(#settings[open]){overflow:hidden}
 dialog.settings{padding:0;margin:auto;width:calc(100% - 28px);max-width:440px;max-height:calc(100dvh - 32px);color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 70px var(--shadow);overflow:auto}
 dialog.settings::backdrop{background:rgb(10 15 28 / .46);backdrop-filter:blur(3px)}

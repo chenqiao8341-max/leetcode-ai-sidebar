@@ -55,7 +55,7 @@ export function makeMessages(s, question, history, prompt, mode) {
   ];
 }
 export function errorMessage(status) {
-  return ({400:'请求格式或模型名称不受支持，请检查模型设置。',401:'API Key 无效，请重新填写。',402:'DeepSeek API 余额不足，请前往开放平台查看。',403:'当前 API Key 没有访问权限。',404:'模型或接口不存在，请刷新模型列表。',429:'请求过于频繁或额度受限，请稍后重试。',500:'DeepSeek 服务暂时出错，请稍后重试。',503:'DeepSeek 服务繁忙，请稍后重试。'})[status] || `请求失败（HTTP ${status}）。`;
+  return ({400:'请求格式或模型名称不受支持，请检查模型设置。',401:'API Key 无效，请重新填写。',402:'API 余额不足，请到服务商平台查看。',403:'当前 API Key 没有访问权限。',404:'模型或接口不存在，请刷新模型列表。',429:'请求过于频繁或额度受限，请稍后重试。',500:'模型服务暂时出错，请稍后重试。',503:'模型服务繁忙，请稍后重试。'})[status] || `请求失败（HTTP ${status}）。`;
 }
 // SSE can split both UTF-8 characters and event boundaries across network chunks.
 export async function consumeSSE(stream, onDelta, signal) {

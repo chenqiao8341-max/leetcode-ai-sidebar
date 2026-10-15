@@ -6,3 +6,7 @@ node_modules/
 *.zip
 .DS_Store
 Thumbs.db
+accounts.json
+pairing.json
+auth.json
+*.tmp
