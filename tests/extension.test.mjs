@@ -55,10 +55,24 @@ function bridgeHarness({editors=[],models=[],root=null}={}) {
   const window={monaco:{editor:{getEditors:()=>editors,getModels:()=>models}},addEventListener:(_,fn)=>listener=fn,postMessage:msg=>response=msg};
   const location={pathname:'/problems/a/',origin:'https://leetcode.cn'};
   const document={hidden:false,querySelectorAll:selector=>selector==='.monaco-editor'?[element]:[],querySelector:()=>element};
-  const context=vm.createContext({window,location,document,Node:FakeNode,Element:FakeElement,setInterval(){},Date,console});
+  const context=vm.createContext({window,location,document,Node:FakeNode,Element:FakeElement,setInterval(){},Date,console,crypto});
   vm.runInContext(bridgeCode,context);
-  return {element,location,window,read(){listener({source:window,origin:location.origin,data:{type:'LC_READING_SNAPSHOT_REQUEST_V1',id:'test'}});return response?.data;}};
+  return {element,location,window,read(){listener({source:window,origin:location.origin,data:{type:'LC_READING_SNAPSHOT_REQUEST_V1',id:'test'}});return response?.data;},edit(data){listener({source:window,origin:location.origin,data:{type:'LC_AGENT_EDIT_REQUEST_V1',id:'edit',data}});return response;}};
 }
+
+test('editor applies a checked edit with undo groups; stale code, model changes and navigation cannot overwrite',()=>{
+  let h,code='original',version=1,model,stops=0,edits=0;
+  const newModel=()=>({getValue:()=>code,getValueInRange:()=>'',getLanguageId:()=> 'python',getVersionId:()=>version,getFullModelRange:()=>({startLineNumber:1,endLineNumber:1,startColumn:1,endColumn:code.length+1})});
+  model=newModel();
+  const editor={getModel:()=>model,getValue:()=>code,getDomNode:()=>h.element,getSelection:()=>null,pushUndoStop(){stops++;},executeEdits(_,items){edits++;code=items[0].text;version++;return true;}};
+  h=bridgeHarness({editors:[editor]});
+  const initial=h.read(),request={url:'https://leetcode.cn/problems/a/',editorId:initial.editorId,version:initial.version,before:'original',after:'fixed'};
+  assert.equal(h.edit(request).ok,true);assert.equal(code,'fixed');assert.equal(stops,2);
+  assert.equal(h.edit(request).ok,false);assert.equal(edits,1);
+  const fresh=h.read();code='user typed';version++;assert.equal(h.edit({...request,...fresh,before:'fixed',after:'bad'}).ok,false);
+  code='fixed';const latest=h.read();model=newModel();assert.equal(h.edit({...request,...latest,before:'fixed',after:'bad'}).ok,false);
+  h.location.pathname='/problems/b/';assert.equal(h.edit({...request,...h.read(),before:code,after:'bad'}).ok,false);assert.equal(edits,1);
+});
 test('page adapter extracts full editor code plus cursor and retained selection',()=>{
   let h; const model={getValue:()=> 'a\nb\nc',getValueInRange:()=> 'b',getLanguageId:()=> 'python',getVersionId:()=>7};
   const editor={getModel:()=>model,getValue:()=>model.getValue(),getDomNode:()=>h.element,getSelection:()=>({startLineNumber:2,endLineNumber:2,startColumn:1,endColumn:2}),getPosition:()=>({lineNumber:2,column:2})};

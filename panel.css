@@ -49,6 +49,10 @@ footer{padding:18px 17px 11px;background:linear-gradient(transparent,var(--bg) 1
 @media(max-width:350px){header{padding:15px}main{padding:12px 11px 0}footer{padding:18px 11px 9px}.card{padding:13px}}
 /* Unified settings dialog. Theme palettes live in themes.css. */
 #settings-toggle{width:auto;display:flex;gap:6px;font-size:11px}
+.agent-capability{display:inline-flex;align-items:center;font-size:10px;color:var(--accent-muted);background:var(--accent-soft);border-radius:6px;padding:5px 7px;max-width:48%;overflow-wrap:anywhere}
+.agent-step[data-state=warning] .agent-step-status{color:var(--warning)}
+.agent-trace{margin:14px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-subtle)}
+.agent-trace>summary{color:var(--accent-muted);font-size:11px}.agent-step{padding:11px 0;border-bottom:1px solid var(--line);font-size:11px;line-height:1.75;overflow-wrap:anywhere}.agent-step:last-child{border-bottom:0;padding-bottom:0}.agent-step strong{font-size:11px;font-weight:600}.agent-step-status{display:block;color:var(--muted);margin-top:2px}.agent-step[data-state=running] strong{color:var(--accent)}.agent-step[data-state=error] .agent-step-status,.agent-step[data-state=interrupted] .agent-step-status{color:var(--warning)}.agent-step details{margin-top:7px;padding-top:7px}.agent-step pre{max-height:230px;overflow:auto;background:var(--code-bg);padding:9px;border-radius:6px;white-space:pre;font:11px/1.7 Consolas,monospace}.agent-step details p{margin:7px 0;color:var(--muted)}.undo-edit{color:var(--accent);margin-top:7px}
 .inline select{min-width:0;flex:1}.inline button{flex-shrink:0}#connection-summary{overflow-wrap:anywhere}#plan-login{font-size:12px}#api-fields,#plan-fields{padding-bottom:10px}
 body:has(#settings[open]){overflow:hidden}
 dialog.settings{padding:0;margin:auto;width:calc(100% - 28px);max-width:440px;max-height:calc(100dvh - 32px);color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 70px var(--shadow);overflow:auto}

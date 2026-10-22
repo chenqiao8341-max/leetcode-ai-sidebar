@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "力扣伴读 · AI Sidebar",
-  "version": "0.5.0",
-  "description": "结合当前力扣题目、代码和选区，使用自定义 API 或 ChatGPT 订阅讨论算法。",
+  "version": "0.6.2",
+  "description": "DeepSeek Agent 结合力扣题目修改代码、运行用例或提交判题，支持状态查询、超时与页面诊断。",
   "permissions": [
     "storage",
     "sidePanel",
@@ -45,6 +45,7 @@
         "https://leetcode.com/problems/*"
       ],
       "js": [
+        "test-tools.js",
         "content.js"
       ],
       "run_at": "document_idle"

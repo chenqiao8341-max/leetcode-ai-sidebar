@@ -16,6 +16,7 @@ export function restoreConversation(value) {
   if(!['explain','hint','debug','complexity'].includes(result.mode))result.mode='explain';
   for (const message of result.messages) {
     if(message.pending) {message.pending=false;message.note='上次生成已中断，已保留收到的内容；可以继续提问。';}
+    message.actions=(Array.isArray(message.actions)?message.actions:[]).slice(0,30).filter(a=>a && typeof a.id==='string' && typeof a.name==='string').map(a=>a.state==='running'?{...a,state:'interrupted',summary:'上次操作已中断，请检查页面实际状态。'}:{...a});
   }
   return result;
 }

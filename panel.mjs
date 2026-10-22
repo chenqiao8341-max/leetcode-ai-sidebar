@@ -1,12 +1,15 @@
-import {DEFAULT_PROMPT, validProblem, problemKey, effectiveSnapshot, contextText, makeMessages} from './core.mjs';
+import {DEFAULT_PROMPT, LEGACY_DEFAULT_PROMPT, validProblem, problemKey, effectiveSnapshot, contextText, makeMessages} from './core.mjs';
 import {renderMessage as renderText, enableCodeCopy} from './render.mjs';
 import {ConversationStore, emptyConversation} from './conversations.mjs';
 import {initializeAppearance} from './appearance.mjs';
 import {initializeModelSettings} from './model-settings.mjs';
+import {agentMessages,runAgent} from './agent.mjs';
+import {createPageTools} from './page-tools.mjs';
+import {renderActions,updateAction,toolLabel} from './agent-ui.mjs';
 const $ = id => document.getElementById(id);
 let settings = {prompt: DEFAULT_PROMPT}, modelUI;
 let snapshot = null, activeIdentity = '', history = [], controller = null, refreshPromise = null, busy = false;
-let windowId, operation = 0, contextError = '';
+let windowId, attachedTabId, operation = 0, contextError = '', activeAgent = null;
 let current = emptyConversation(), attached = false, pendingAnswer = null, lastProgressSave = 0, loadFailed = false;
 const store = new ConversationStore(chrome.storage.local);
 const memory = new Map();
@@ -29,18 +32,20 @@ function status(text, error = false) { $('status').textContent = text; $('status
 function addMessage(role, text, reference = '', record = null) {
   $('welcome')?.remove();
   const article = document.createElement('article'); article.className = `message ${role}`;
+  if(record?.id)article.dataset.messageId=record.id;
   const who = document.createElement('div'); who.className = 'who'; who.textContent = role === 'user' ? '你' : record?.modelLabel || 'AI · 伴读';
   if (reference) {const ref = document.createElement('span'); ref.textContent = '· ' + reference; who.append(ref);}
   const body = document.createElement('div'); body.className = 'body'; renderText(body, text);
   article.append(who, body); $('messages').append(article);
   if(!record) {record={role,text,reference};current.messages.push(record);}
   if(record.note) note(article,record.note);
+  renderActions(article,record.actions,(action,button)=>undoAction(action,button));
   return {article, body, record};
 }
 function captureCurrent() {
   current.history=history; current.draft=$('question').value;
   current.manualCode=$('manual-code').value;current.useManual=$('use-manual').checked;
-  current.mode=$('mode').value;if(snapshot?.title)current.title=snapshot.title;
+  if(snapshot?.title)current.title=snapshot.title;
 }
 function persistCurrent() {
   if(!activeIdentity || loadFailed)return Promise.resolve();
@@ -55,7 +60,12 @@ function persistCurrent() {
 }
 function interruptCurrent(reason) {
   operation++; controller?.abort();controller=null;
-  if(pendingAnswer){pendingAnswer.pending=false;pendingAnswer.note=reason;pendingAnswer=null;}
+  activeAgent=null;
+  if(pendingAnswer){
+    pendingAnswer.pending=false;pendingAnswer.note=reason;
+    for(const action of pendingAnswer.actions || [])if(action.state==='running'){action.state='interrupted';action.summary='任务已中断，请检查页面上的实际状态。';}
+    pendingAnswer=null;
+  }
   setBusy(false);
 }
 function clearConversation() {
@@ -64,7 +74,9 @@ function clearConversation() {
   persistCurrent();
 }
 function setBusy(value) {
-  busy = value; $('send').disabled = value || !attached; $('stop').hidden = !value;
+  busy = value; $('send').disabled = !attached || (value && !activeAgent); $('stop').hidden = !value;
+  $('send').textContent=value && activeAgent?'补充要求 ↑':'发送 ↑';
+  $('question').placeholder=value && activeAgent?'可以继续补充：十秒超时后停止等待，检查运行控件…':'解释这段代码，或帮我修改并运行用例…';
 }
 async function setIdentity(id) {
   if (id === activeIdentity) return;
@@ -76,7 +88,7 @@ async function setIdentity(id) {
   catch {current=emptyConversation();loadFailed=true;status('无法读取本机对话记录，请重新打开侧栏。',true);}
   history=current.history;
   $('question').value=current.draft;$('manual-code').value=current.manualCode;
-  $('use-manual').checked=current.useManual;$('mode').value=current.mode;
+  $('use-manual').checked=current.useManual;
   $('messages').replaceChildren(welcome.cloneNode(true));
   for(const record of current.messages)addMessage(record.role,record.text,record.reference,record);
   $('question').disabled=loadFailed;$('manual-code').disabled=loadFailed;
@@ -111,7 +123,8 @@ function renderContext() {
 function setAttached(value) {
   value=value && !loadFailed;
   attached=value;$('away-banner').hidden=value || !activeIdentity;
-  $('send').disabled=busy || !value;
+  $('send').disabled=!value || (busy && !activeAgent);
+  if(!value && busy)controller?.abort();
 }
 async function refresh() {
   if (refreshPromise) return refreshPromise;
@@ -130,11 +143,30 @@ async function refresh() {
       const now = (await chrome.tabs.query({active:true, windowId}))[0];
       if (!now || now.id !== tab.id || problemKey(now.url) !== identity) {setAttached(false);renderContext();return false;}
       if (!response?.ok || problemKey(response.data?.url) !== problemKey(tab.url)) throw new Error(response?.error || '题目正在切换，请稍后再试。');
-      snapshot = response.data;contextError='';setAttached(true);renderContext();return true;
+      if(busy && attachedTabId!==undefined && attachedTabId!==tab.id)controller?.abort();
+      attachedTabId=tab.id;snapshot = response.data;contextError='';setAttached(true);renderContext();return true;
     } catch (e) {setAttached(false);contextError=e.message || '读取页面失败，请刷新力扣网页。';renderContext();return false;}
     finally { refreshPromise = null; }
   })();
   return refreshPromise;
+}
+function pageTools(url=snapshot?.url) {
+  return createPageTools({tabId:attachedTabId,windowId,url,manual:$('use-manual').checked,onChange:data=>{
+    if(problemKey(snapshot?.url)===problemKey(data.url)){snapshot={...snapshot,...data};renderContext();}
+  }});
+}
+async function undoAction(action,button) {
+  if(busy){status('请先停止当前任务，再撤销修改。',true);return;}
+  button.disabled=true;setBusy(true);
+  const aborter=new AbortController();controller=aborter;
+  try{
+    if(!await refresh() || problemKey(snapshot?.url)!==problemKey(action.change.url))throw new Error('请回到这次修改所属的题目页再撤销。');
+    await pageTools().undo(action.change,aborter.signal);action.undone=true;action.summary='修改已撤销';button.textContent='已撤销';
+    button.closest('.agent-step').querySelector('.agent-step-status').textContent=action.summary;
+    history.push({role:'assistant',content:'[插件操作记录] 用户通过侧栏撤销了一次代码修改；后续以最新编辑器内容为准。'});history=history.slice(-8);
+    status('已撤销这次修改。');await persistCurrent();
+  }catch(e){button.disabled=false;status(e.message,true);}
+  finally{if(controller===aborter)controller=null;setBusy(false);}
 }
 async function saveSettings() {
   if(busy){$('settings-status').textContent='请等待当前回答结束，或先停止生成，再切换连接。';return;}
@@ -149,8 +181,16 @@ async function saveSettings() {
 }
 async function ask(event) {
   event.preventDefault();
-  if (busy) return;
   const question = $('question').value.trim(); if (!question) return;
+  if (busy) {
+    if(!activeAgent || !attached)return;
+    activeAgent.instructions.push(question);activeAgent.followups.push(question);
+    addMessage('user',question,'补充要求');$('question').value='';
+    const index=current.messages.indexOf(activeAgent.answer.record);
+    if(index>=0)current.messages.splice(index,1);current.messages.push(activeAgent.answer.record);
+    $('messages').append(activeAgent.answer.article);
+    activeAgent.tools.interruptWait();persistCurrent();status('已补充要求；正在结束当前查询等待，模型会据此调整后续操作。');return;
+  }
   const originIdentity=activeIdentity;
   setBusy(true);
   let connection;
@@ -163,49 +203,77 @@ async function ask(event) {
   try { s = currentSnapshot(); } catch (e) {setBusy(false); status(e.message, true); return;}
   if (!s.code && !s.problem) {setBusy(false); status('没有读取到代码或题目，请刷新页面或使用手动代码。', true); return;}
   const myOperation = ++operation, identity = activeIdentity;
-  const messages = makeMessages(s, question, history, settings.prompt, $('mode').value);
+  const messages = connection.agentTurn?agentMessages(s,question,history,settings.prompt):makeMessages(s,question,history,settings.prompt);
+  const tools=connection.agentTurn?pageTools():null;
   setBusy(true); addMessage('user', question, positionLabel(s)); $('question').value = '';
   const answer = addMessage('assistant', '正在阅读代码…');
   answer.record.modelLabel=connection.label;answer.article.querySelector('.who').textContent=connection.label;
+  answer.record.id=crypto.randomUUID();answer.article.dataset.messageId=answer.record.id;
   answer.record.text='';answer.record.pending=true;pendingAnswer=answer.record;
   await persistCurrent();
   answer.article.scrollIntoView({block:'nearest', behavior:'smooth'});
   if(myOperation!==operation)return;
   const aborter = new AbortController(); controller = aborter;
+  const agentSession=connection.agentTurn?{instructions:[],followups:[],answer,tools}:null;
+  activeAgent=agentSession;setBusy(true);
   let text = '', timedOut = false, renderTimer = null;
-  const timeout = setTimeout(() => {timedOut = true; aborter.abort();}, 240000);
+  const timeout = setTimeout(() => {timedOut = true; aborter.abort();}, connection.agentTurn?600000:240000);
   status('正在连接 '+connection.label+'…');
   try {
-    const result = await connection.generate(messages, (delta, meta) => {
+    const onDelta = (delta, meta) => {
       if (myOperation !== operation) return;
       text += delta;
       answer.record.text=text;
       if(Date.now()-lastProgressSave>1000){lastProgressSave=Date.now();persistCurrent();}
-      status(meta.reasoning && !text ? '模型正在思考…' : '正在回答…');
+      status(meta.reasoning ? '模型正在思考…' : '正在回答…');
       if (!renderTimer) {
         renderTimer = setTimeout(() => {renderTimer = null; if (myOperation === operation) renderText(answer.body, text || '模型正在思考…');},100);
       }
-    }, aborter.signal);
+    };
+    const result = connection.agentTurn?await runAgent({messages,turn:connection.agentTurn,execute:tools.execute,onDelta,takeInstructions:()=>agentSession.instructions.splice(0),signal:aborter.signal,onTool:event=>{
+      if(myOperation!==operation){
+        // An edit already dispatched before a tab switch can acknowledge late.
+        // Attach its real result to that original message, including undo data.
+        const saved=identity===activeIdentity?current:memory.get(identity),record=saved?.messages.find(m=>m.id===answer.record.id);
+        if(record){
+          record.actions ||= [];updateAction(record.actions,event);
+          if(identity===activeIdentity){
+            const article=$('messages').querySelector(`[data-message-id="${record.id}"]`);
+            if(article)renderActions(article,record.actions,(action,button)=>undoAction(action,button));
+            persistCurrent();
+          }else{memory.set(identity,structuredClone(saved));store.save(identity,saved).catch(()=>{});}
+        }
+        return;
+      }
+      answer.record.actions ||= [];updateAction(answer.record.actions,event);
+      renderActions(answer.article,answer.record.actions,(action,button)=>undoAction(action,button));
+      if(event.phase==='start')status(toolLabel(event.name)+'…');
+      persistCurrent();
+    }}):await connection.generate(messages,onDelta,aborter.signal);
     if (myOperation !== operation || identity !== activeIdentity) return;
     renderText(answer.body, result.text);
     answer.record.text=result.text;answer.record.pending=false;pendingAnswer=null;
     const oldReference = s.selection?.text || (s.complete && s.cursor?.line ? s.code.split('\n')[s.cursor.line-1] : '');
-    history.push({role:'user', content:`${question}\n（上轮引用 ${positionLabel(s)}，内容：${oldReference || '未指定'}；后续以最新快照为准。）`}, {role:'assistant', content:result.text});
+    const activity=answer.record.actions?.map(a=>`${toolLabel(a.name)}：${a.summary}`).join('；');
+    const request=[question,...(agentSession?.followups || [])].join('\n用户补充：');
+    history.push({role:'user', content:`${request}\n（上轮引用 ${positionLabel(s)}，内容：${oldReference || '未指定'}；后续以最新快照为准。）`}, {role:'assistant', content:result.text+(activity?'\n[插件操作记录] '+activity:'')});
     history = history.slice(-8);
     if (result.finishReason === 'length') {answer.record.note='达到本次输出长度上限，回答可能未结束。可以继续追问。';note(answer.article,answer.record.note); status('已达到输出上限。');}
-    else status('回答完成。修改代码后，可以直接继续提问。');
+    else status(connection.agentTurn?'Agent 任务完成，可查看操作记录或撤销修改。':'回答完成。修改代码后，可以直接继续提问。');
   } catch (e) {
     if (myOperation !== operation) return;
-    const message = e.name === 'AbortError' ? timedOut ? '等待超过 4 分钟，已停止。请稍后重试。' : '已停止生成。' : e instanceof TypeError ? '无法连接所选服务，请检查 API 地址、网络或本地连接程序。' : e.message;
+    const message = e.name === 'AbortError' ? timedOut ? '任务超过时间上限，已停止。已应用的修改保留。' : '已停止。已应用的代码修改保留；已启动的力扣测试可能继续运行。' : e instanceof TypeError ? '无法连接所选服务，请检查 API 地址、网络或本地连接程序。' : e.message;
     renderText(answer.body, text || message);
     answer.record.text=text || message;answer.record.pending=false;pendingAnswer=null;
     if (text) {answer.record.note=message + ' 当前回答不完整，未加入后续对话上下文。';note(answer.article,answer.record.note);}
     if (!text) $('question').value ||= question;
+    const activity=answer.record.actions?.map(a=>`${toolLabel(a.name)}：${a.summary}`).join('；');
+    if(activity){history.push({role:'user',content:[question,...(agentSession?.followups || [])].join('\n用户补充：')},{role:'assistant',content:'任务未完成：'+message+'\n[插件操作记录] '+activity});history=history.slice(-8);}
     status(message, e.name !== 'AbortError' || timedOut);
   } finally {
     clearTimeout(renderTimer);
     clearTimeout(timeout);
-    if (myOperation === operation) {controller = null;setBusy(false);persistCurrent();}
+    if (myOperation === operation) {controller = null;activeAgent=null;setBusy(false);persistCurrent();}
   }
 }
 function note(article, text) {const p = document.createElement('p'); p.className = 'answer-note'; p.textContent = text; article.append(p);}
@@ -215,7 +283,7 @@ async function initialize() {
   windowId = (await chrome.windows.getCurrent()).id;
   await chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
   const [local, session] = await Promise.all([chrome.storage.local.get('settings'), chrome.storage.session.get(`lastProblem:${windowId}`)]);
-  settings.prompt=local.settings?.prompt || DEFAULT_PROMPT;
+  settings.prompt=!local.settings?.prompt || local.settings.prompt===LEGACY_DEFAULT_PROMPT?DEFAULT_PROMPT:local.settings.prompt;
   $('system-prompt').value=settings.prompt;
   modelUI=await initializeModelSettings();
   $('settings-toggle').addEventListener('click',()=>openSettings());
@@ -239,18 +307,18 @@ async function initialize() {
   $('save-settings').addEventListener('click', saveSettings);
   $('reset-prompt').addEventListener('click', () => {$('system-prompt').value = DEFAULT_PROMPT; $('settings-status').textContent = '已恢复默认规则，点击保存后生效。';});
   $('refresh').addEventListener('click', async () => {const ok = await refresh(); status(ok ? '已获取最新页面内容。' : contextError, !ok);});
-  $('manual-code').addEventListener('input',()=>{renderContext();persistCurrent();});$('use-manual').addEventListener('change',()=>{renderContext();persistCurrent();});
-  $('question').addEventListener('input',()=>persistCurrent());$('mode').addEventListener('change',()=>persistCurrent());
+  $('manual-code').addEventListener('input',()=>{renderContext();persistCurrent();});$('use-manual').addEventListener('change',()=>{controller?.abort();renderContext();persistCurrent();});
+  $('question').addEventListener('input',()=>persistCurrent());
   $('clear-chat').addEventListener('click', () => {clearConversation(); status('对话已清空。');});
   $('stop').addEventListener('click', () => controller?.abort());
   $('ask-form').addEventListener('submit', ask);
   $('question').addEventListener('keydown', e => {if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {e.preventDefault(); $('ask-form').requestSubmit();}});
-  document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => {$('question').value = button.dataset.question; $('mode').value = button.dataset.mode || 'explain'; $('question').focus();persistCurrent();}));
+  document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => {$('question').value = button.dataset.question;$('question').focus();persistCurrent();}));
   const last=session[`lastProblem:${windowId}`];
   if(validProblem(last))await setIdentity(problemKey(last));
   window.addEventListener('pagehide',()=>{interruptCurrent('侧栏已关闭，生成中断；已收到的内容已保留。');persistCurrent();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)persistCurrent();else refresh();});
-  chrome.tabs.onActivated?.addListener(()=>refresh());
+  chrome.tabs.onActivated?.addListener(info=>{if(info.windowId===windowId && info.tabId!==attachedTabId)controller?.abort();refresh();});
   await refresh();
   if (modelUI.configured) status(snapshot ? '已连接页面读取功能，可以提问。' : contextError, !snapshot);
   setInterval(refresh, 1800);

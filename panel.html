@@ -20,13 +20,13 @@
       <div id="away-banner" class="away-banner" hidden>网页读取已暂停，对话和草稿已保留。回到题目页即可继续提问。</div>
       <div class="section-head"><div><h2>一起推敲</h2><span id="save-state" class="save-state" role="status">按题目保存对话</span></div><button id="clear-chat" class="text-button">清空本题对话</button></div>
       <div id="messages" aria-live="polite" aria-relevant="additions text">
-        <div id="welcome" class="welcome"><span class="spark" aria-hidden="true">✦</span><p>从你卡住的那一行开始。</p><span>选中一段代码，或直接提问。<br>我们一步一步想明白。</span></div>
+        <div id="welcome" class="welcome"><span class="spark" aria-hidden="true">✦</span><p>从理解，到动手解决。</p><span>选中代码直接问，也可以要求修改或运行。<br>DeepSeek Agent 会按你的目标行动。</span></div>
       </div>
     </section>
   </main>
   <footer>
-    <div class="suggestions"><button data-question="请解释我选中的代码；若没有选区，解释光标所在行。">解释这里</button><button data-question="给我一个下一步的小提示，不要直接给完整答案。" data-mode="hint">给个提示</button><button data-question="分析当前代码的时间和空间复杂度。" data-mode="complexity">分析复杂度</button></div>
-    <form id="ask-form"><label class="sr-only" for="question">你的问题</label><textarea id="question" rows="3" maxlength="8000" placeholder="比如：这里为什么要 path.pop()？"></textarea><div class="compose-bottom"><select id="mode" aria-label="教学方式"><option value="explain">解释代码</option><option value="hint">启发提示</option><option value="debug">排查问题</option><option value="complexity">复杂度</option></select><span class="shortcut">Ctrl + Enter</span><button id="stop" type="button" class="secondary" hidden>停止</button><button id="send" type="submit" class="primary">发送 ↑</button></div></form>
+    <div class="suggestions"><button data-question="请解释我选中的代码；若没有选区，解释光标所在行。">解释这里</button><button data-question="给我一个下一步的小提示，不要直接给完整答案。">给个提示</button><button data-question="帮我排查并修复当前代码，直接修改编辑器，然后运行当前用例验证；若无法确认结果，请如实说明。">修复并运行</button><button data-question="请把当前代码提交给力扣进行完整在线判题，十秒内未确认结果就停止监控，并检查页面诊断；不要把运行当前用例当作提交判题。">提交判题</button></div>
+    <form id="ask-form"><label class="sr-only" for="question">你的问题</label><textarea id="question" rows="3" maxlength="8000" placeholder="解释这段代码，或帮我修改并运行用例…"></textarea><div class="compose-bottom"><span id="agent-capability" class="agent-capability">Agent · DeepSeek</span><span class="shortcut">Ctrl + Enter</span><button id="stop" type="button" class="secondary" hidden>停止</button><button id="send" type="submit" class="primary">发送 ↑</button></div></form>
     <p id="status" class="status" role="status">先打开设置，配置模型连接。</p>
     <p id="connection-summary" class="privacy">发送时将本题上下文与最近对话交给已选服务商。</p>
   </footer>
@@ -87,7 +87,8 @@
         <button id="reset-prompt" class="secondary">恢复默认提示词</button>
       </section>
       <section id="section-about" role="tabpanel" aria-labelledby="tab-about" hidden>
-        <h3>力扣伴读 <span class="version-tag">0.5.0</span></h3><p class="muted">一点提示，多一点理解。</p>
+        <h3>力扣伴读 <span class="version-tag">0.6.2</span></h3><p class="muted">从理解，到动手解决。</p>
+        <div class="about-item"><strong>DeepSeek Agent</strong><p>按要求读取、修改、运行当前用例，或提交给力扣完整判题。后台任务可查询、诊断和停止监控，支持自定超时；执行中可继续发送补充要求。每次最多 12 轮请求、24 次工具调用、3 次运行或提交。</p></div>
         <div class="about-item"><strong>对话保存在本机</strong><p>按题目分别保存消息和草稿，切换网页不会清空。发送时附带最新题目内容与最近 4 轮有效对话。</p></div>
         <div class="about-item"><strong>Markdown 与数学公式</strong><p>渲染库和字体随插件打包，无需额外连接外部 CDN。</p></div>
         <div class="about-item"><strong>统一设置入口</strong><p>外观、模型与教学偏好都集中在这里，后续功能也会按类别加入。</p></div>

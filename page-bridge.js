@@ -1,10 +1,13 @@
-// Runs in the page world. No API keys, storage access, network calls or edits.
+// Runs in the page world. Only bounded editor reads and version-checked edits;
+// no API keys, storage access, network requests or executable model output.
 (() => {
   if (window.__LC_READING_BRIDGE_V1__) return;
   window.__LC_READING_BRIDGE_V1__ = true;
   const MAX = 60000;
   let lastUrl = '', cachedEditor = null, lastSelection = null, lastCursor = null, lastModel = null;
   let disposables = [], lastDiscovery = 0;
+  const modelIds = new WeakMap();
+  function modelId(model) {if (!modelIds.has(model)) modelIds.set(model, crypto.randomUUID());return modelIds.get(model);}
   const isEditor = x => x && typeof x.getModel === 'function' && typeof x.getSelection === 'function' && typeof x.getValue === 'function';
   const visible = el => el instanceof Element && el.isConnected && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
   function reset() {
@@ -93,7 +96,7 @@
       if (cachedEditor && editorVisible(cachedEditor)) {
         remember();
         const m = cachedEditor.getModel(), code = m.getValue();
-        return {code: code.slice(0, MAX), complete: code.length <= MAX, source: 'Monaco 编辑器', language: m.getLanguageId?.() || '', version: m.getVersionId?.(), selection: lastSelection, cursor: lastCursor};
+        return {code: code.slice(0, MAX), complete: code.length <= MAX, source: 'Monaco 编辑器', language: m.getLanguageId?.() || '', version: m.getVersionId?.(), editorId: modelId(m), editable: typeof cachedEditor.executeEdits === 'function', selection: lastSelection, cursor: lastCursor};
       }
       // A single attached model is unambiguous; never choose among multiple models arbitrarily.
       const models = (monacoApi()?.getModels?.() || []).filter(m => !m.isDisposed?.() && m.isAttachedToEditor?.());
@@ -113,11 +116,30 @@
     } catch {}
     return null;
   }
+  function edit(data) {
+    const before = snapshot();
+    if(Number.isFinite(data?.expires_at) && Date.now()>data.expires_at)throw new Error('修改请求已过期，未应用。');
+    if (document.hidden || !data || data.url !== location.origin + location.pathname) throw new Error('题目页面已变化，请重新读取。');
+    if (!before?.complete || !before.editable || !cachedEditor) throw new Error('未找到可写的 Monaco 编辑器，请刷新页面；当前只能分析代码。');
+    if (data.editorId !== before.editorId || data.version !== before.version || data.before !== before.code) throw new Error('代码版本已变化，请重新读取后再修改。');
+    if (typeof data.after !== 'string' || data.after.length > MAX || data.after === data.before) throw new Error('修改内容无效或超过长度限制。');
+    const model = cachedEditor.getModel();
+    // Preserve native Ctrl+Z by creating an undo group rather than setValue().
+    cachedEditor.pushUndoStop();
+    const accepted = cachedEditor.executeEdits('leetcode-ai-agent', [{range:model.getFullModelRange(),text:data.after,forceMoveMarkers:true}]);
+    cachedEditor.pushUndoStop();
+    if (accepted === false || model.getValue() !== data.after) throw new Error('编辑器未应用预期修改，请重新读取代码确认。');
+    remember();return snapshot();
+  }
   window.addEventListener('message', event => {
-    if (event.source !== window || event.origin !== location.origin || event.data?.type !== 'LC_READING_SNAPSHOT_REQUEST_V1') return;
+    if (event.source !== window || event.origin !== location.origin || !['LC_READING_SNAPSHOT_REQUEST_V1','LC_AGENT_EDIT_REQUEST_V1'].includes(event.data?.type)) return;
     const id = event.data.id;
     if (typeof id !== 'string' || id.length > 80) return;
-    window.postMessage({type: 'LC_READING_SNAPSHOT_RESPONSE_V1', id, data: snapshot()}, location.origin);
+    if (event.data.type === 'LC_READING_SNAPSHOT_REQUEST_V1') window.postMessage({type:'LC_READING_SNAPSHOT_RESPONSE_V1',id,data:snapshot()},location.origin);
+    else {
+      try {window.postMessage({type:'LC_AGENT_EDIT_RESPONSE_V1',id,ok:true,data:edit(event.data.data)},location.origin);}
+      catch(e) {window.postMessage({type:'LC_AGENT_EDIT_RESPONSE_V1',id,ok:false,error:e.message},location.origin);}
+    }
   });
   setInterval(() => { if (!document.hidden) discover(); }, 1500);
 })();

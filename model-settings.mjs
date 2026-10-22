@@ -1,4 +1,5 @@
 import {ConnectionStore,normalizeConnection,normalizeApiUrl,permissionOrigin,fetchModels,generate} from './providers.mjs';
+import {supportsAgent,agentTurn} from './agent.mjs';
 const $=id=>document.getElementById(id);
 export const PLAN_ROOT='http://127.0.0.1:18765';
 export function planFetch(key,accountId,fetcher=fetch){
@@ -25,6 +26,9 @@ export async function initializeModelSettings(){
   function summary(){
     $('connection-summary').textContent=mode==='plan'?`ChatGPT 订阅 · ${planSettings.model || '未选模型'} · 发送时附带本题上下文与最近对话`:
       `${active.name} · ${active.model} · ${new URL(active.apiUrl).host} · 发送本题与最近对话，按服务商用量计费`;
+    const capable=mode==='api' && supportsAgent(active);
+    $('agent-capability').textContent=capable?'Agent · DeepSeek':'对话 · 当前连接尚未适配工具';
+    $('agent-capability').title=capable?'按要求修改、运行当前用例或提交完整判题；支持诊断、超时、补充要求、停止和撤销。':'工具暂仅适配 DeepSeek 官方地址的 Chat Completions 格式。';
   }
   function protocolHint(){
     let deepseek=false;try{deepseek=new URL($('api-url').value).hostname==='api.deepseek.com';}catch{}
@@ -131,7 +135,8 @@ export async function initializeModelSettings(){
     const key=mode==='plan'?planKey:activeKey,accountId=planSettings.accountId,type=mode;
     if(!connection.model || (type==='plan' && (!key || !accountId)))throw new Error('请先在设置中完成模型连接。');
     if(!await chrome.permissions.contains({origins:[permissionOrigin(connection.apiUrl)]}))throw new Error('该服务的访问权限未授予，请打开模型设置并保存。');
-    return {label:`${connection.name} · ${connection.model}`,generate:(messages,onDelta,signal)=>generate(connection,key,messages,onDelta,signal,type==='plan'?planFetch(key,accountId):fetch)};
+    return {label:`${connection.name} · ${connection.model}`,agentTurn:type==='api' && supportsAgent(connection)?(messages,onDelta,signal,options)=>agentTurn(connection,key,messages,onDelta,signal,options):null,
+      generate:(messages,onDelta,signal)=>generate(connection,key,messages,onDelta,signal,type==='plan'?planFetch(key,accountId):fetch)};
   }
   $('connection-type').value=mode;switchFields();
   $('plan-key').value=planKey;$('remember-plan-key').checked=!!planSettings.remember;

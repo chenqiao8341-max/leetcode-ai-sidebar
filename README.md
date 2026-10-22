@@ -1,10 +1,17 @@
 # 力扣伴读 · AI Sidebar
 
-Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光标，帮助理解算法。当前版本 **0.5.0**。
+Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光标，帮助理解和修改代码。当前版本 **0.6.2**。
 
 ## 本版新增
 
-- **多个 API 连接**：分别保存名称、API URL、API Key、模型及接口格式，保存时启用所选连接。
+- **区分运行与提交**：`run_tests` 运行页面当前用例；`submit_solution` 把代码提交给力扣完整在线判题，只有用户明确要求时才提交。
+- **后台任务与超时**：启动执行立即返回任务编号，再查询状态；支持模型设置十秒早停、调整已有任务超时或停止监控。等待结果时仍可检查页面。
+- **页面诊断**：`inspect_page` 返回真实 DOM 控件、运行与提交按钮、结果区域、任务状态和错误；可用有长度上限的 CSS 选择器进一步检查、选择控件与结果区域。
+- **执行中补充要求**：Agent 运行期间，发送按钮变为“补充要求”。例如要求停止等待并检查原因，会释放当前查询等待；尚未开始的旧工具会跳过。
+- **可见的工具过程**：侧栏保存操作记录、代码差异、判定与诊断。启动成功和工具调用成功不会显示为用例验证通过。
+- **撤销修改**：每条成功修改提供“撤销此修改”。通过 Monaco 编辑 API 保留原生 Ctrl+Z 撤销记录；代码已变化时不会直接覆盖。
+- **停止与限额**：随时停止；切换网页、切题或关闭侧栏停止任务。每次最多 12 轮模型请求、24 次工具调用、3 次运行或提交、10 分钟。已经应用的修改保留；停止监控不等于终止力扣服务器的执行。
+- **保留多个 API 连接**：分别保存名称、API URL、API Key、模型及接口格式，保存时启用所选连接。
 - **模型选择**：通过 `/models` 获取模型目录，使用下拉菜单选择，也可手动填写模型 ID。
 - **两种 API 格式**：OpenAI 兼容 Chat Completions 和 OpenAI Responses。DeepSeek 专用的 thinking 参数仅发送到 DeepSeek 官方地址。
 - **ChatGPT 订阅入口**：独立浏览器授权、本地凭证续期、账号切换、账号模型目录与 Responses 流式回答。
@@ -34,6 +41,26 @@ Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光�
 示例基础地址：DeepSeek `https://api.deepseek.com`；OpenAI API `https://api.openai.com/v1`；本地兼容服务可用 `http://127.0.0.1:端口/v1`。远程服务要求 HTTPS。本地无鉴权服务可留空 Key。
 
 各连接的密钥绑定到该连接和完整基础 URL；修改地址会清空当前密钥输入，避免把旧服务的密钥发给新地址。“清除此 API 的密钥”只处理当前编辑的连接。默认密钥保存到浏览器会话，勾选“记住密钥”才持久保存到扩展本地存储，不使用云同步。
+
+## DeepSeek Agent：修改、运行与提交判题
+
+1. 在 **设置 → 模型** 选择 DeepSeek 官方地址 `https://api.deepseek.com`（或 `/v1`）、**Chat Completions** 和账号可用、支持工具调用的 DeepSeek 模型，填写 Key 并保存。支持深度思考，工具循环会完整回传当次任务需要的推理字段；推理内容不展示、不保存进本机对话。
+2. 重新加载扩展后，关闭并重新打开侧栏、刷新力扣题目页。输入框下方显示 **Agent · DeepSeek** 即表示该连接会提供工具。
+3. 可以问“这里为什么要 pop”、要求“修复后运行当前用例”，或明确说“提交当前代码进行完整判题，十秒超时后停止监控并排查”。运行当前用例与提交完整判题是两个独立操作。
+4. 展开 **Agent 操作**，查看每次工具结果。成功写入后可查看修改前后片段，点击 **撤销此修改** 可恢复；力扣编辑器本身的 Ctrl+Z 也可使用。
+5. 修改、运行都会校验题目 URL、编辑器实例、代码版本与完整原文；手动编辑、切语言或编辑器重建后需要重新读取。工具拒绝模糊的多处匹配，不执行模型输出的 JavaScript。
+
+工具暂仅适配 **DeepSeek 官方主机 + Chat Completions**；其他 API、DeepSeek Responses、第三方中转和 ChatGPT 订阅继续提供文本问答，输入区会显示当前连接尚未适配工具。页面写入暂支持可定位的 **Monaco 编辑器**，CodeMirror 与仅可见代码的读取降级路径仍为只读。启用“手动提供完整代码”时不能修改或运行网页。
+
+运行与提交使用力扣页面现有控件；模型不能执行任意 JavaScript 或随意点击其他按钮。启动后立即返回 `run_id`，`get_test_run` 可查询状态，`cancel_test_run` 停止插件监控。默认运行超时 30 秒、提交判题 60 秒，模型可通过 `timeout_ms` 设置为 10 秒或其他 1–180 秒的值；已有任务的超时从原启动时间计算。单次查询可等待 0–10 秒，失去页面响应时单次消息等待也有硬上限。达到期限后 Agent 可以继续调用诊断工具，不必结束整段对话。
+
+只有 `status=completed`、`fresh=true` 才确认本次新的判定，`verdict.passed=true` 才表示通过；`task_kind=submit` 才属于提交完整判题。`running`、`timed_out`、`canceled`、`failed` 与 `invalidated` 都不会当作通过。提交页跳转仍绑定同一题目与浏览器标签，返回可识别的提交编号和地址；不能把原提交编号的旧结果用于新提交。提交后若又修改了编辑器，结果只验证提交时的代码版本。
+
+检测不到唯一控件或结果区域时，可以先让模型调用 `inspect_page`，读取 CSS 选择器匹配的可见节点、控件属性与后台任务诊断，再指定 `button_id` / `result_selector` 或重试。结果区域改选后不会直接把已经显示的旧 Accepted 当作新判定。登录或验证码需要用户在力扣页面完成；没有绕过这些步骤的能力。不同布局、登录状态与力扣 DOM 改版仍可能需要更新适配。
+
+0.6.2 修复结果已显示但监控仍超时：新增 `[data-e2e-locator="console-result"]` 与 `#result_tab` 结果容器，`#result_tabbar_outer` 作为邻近结果面板的定位锚点，避免把标签栏当作判定内容。记录结果内容变动，以及采样间瞬时出现的 disabled / 判题中状态；即使最终文本与上次相同，也可结合本次忙碌和结果变动证据确认执行。只有重绘、样式变化或调试控件变化，仍不能证明旧 Accepted 是新结果。诊断新增 `observed_result_mutation`、`result_region_missing` 和具体定位来源；调试控件放入独立的 `debug_controls`。
+
+代码变更及工具结果保存在对应题目的本机对话中。撤销会先检查当前代码仍等于那次修改后的版本；如果已继续改动，请从最近一次修改依次撤销、使用编辑器 Ctrl+Z，或让 Agent 根据最新代码调整。
 
 ## ChatGPT 订阅模式
 
@@ -68,7 +95,7 @@ Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光�
 - 发送前会读取最新代码与题目；“查看将发送的上下文”可核对内容。页面脚本不能向模型发出指令，页面文本仅作为待分析数据。
 - 若显示“仅屏幕可见代码（不完整）”，展开“手动提供完整代码”并粘贴。手动代码按题保存，不会随网页自动变化。
 - 切到普通网页只暂停页面读取，不清空对话。不同题目的消息、草稿和手动代码分别保存；重启浏览器后回到相应题目恢复。
-- 切题或关闭侧栏会中止正在生成的回答并保留已收到内容。切换模型保留已有历史，后续发送会把最近对话交给所选服务商 / 账号。
+- 切换网页、切题或关闭侧栏会中止正在执行的任务并保留已收到内容与操作记录。切换模型保留已有历史，后续发送会把最近对话交给所选服务商 / 账号。
 - Ctrl+Enter 发送，Enter 换行；可点击停止。模型设置保存时需要等待回答结束或先停止。
 - 设置 → 外观提供浅色、石墨深色、暖纸、雾紫和跟随系统；选择即自动保存。
 - 设置 → 教学可编辑系统提示词，例如要求“只给提示”；修改后保存。
@@ -77,7 +104,7 @@ Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光�
 
 ## 数据与权限
 
-页面读取仅限 `leetcode.cn/problems/*` 与 `leetcode.com/problems/*`，不自动运行或提交代码。新增 API 主机通过 **可选权限** 按需授权；声明 `https://*/*` 并不等于安装时获得所有网站访问权限。页面内容脚本仍仅在力扣题目页运行。
+页面操作仅限 `leetcode.cn/problems/*` 与 `leetcode.com/problems/*`，Agent 按本轮请求修改、运行或明确要求的提交。新增 API 主机通过 **可选权限** 按需授权；声明 `https://*/*` 并不等于安装时获得所有网站访问权限。页面内容脚本仍仅在力扣题目页运行。0.6.2 未增加浏览器权限。
 
 点击发送会把本题正文、代码、选区 / 光标、可读取的测试区、当前问题和最近 4 轮有效对话传给选定服务。API 模式直接连接用户配置的地址；订阅模式经本机程序连接 OpenAI 官方服务。没有开发者服务器、统计或额外上传。
 
@@ -103,10 +130,12 @@ Microsoft Edge 侧栏扩展，结合当前力扣题目、代码、选区与光�
 node --test tests/*.test.mjs
 ```
 
-测试覆盖对话持久化、页面读取、Markdown / 数学公式、主题、配置迁移、凭据隔离、两种流式协议、OAuth 身份与权限检查、取消登录、续期、账号隔离、本地连接鉴权与请求范围。
+测试覆盖对话持久化、页面读取与编辑、Agent 流式工具拼接和执行循环、推理字段回传、版本冲突、撤销保护、手动代码只读、工具 / 运行上限、停止、运行结果新旧判断，以及 Markdown / 数学公式、主题、模型配置与订阅连接等现有功能。
 
-0.5.0 已在本机执行自动测试、Windows 本地程序启动测试及 400px 侧栏的模拟 API / 模拟授权交互验证；**尚未使用真实 API 密钥或真实 ChatGPT 账号完成端到端推理测试**。Edge 的真实新增主机权限弹窗也需在更新后由用户操作验证。
+浏览器 DOM 回归页为 `tests/browser/test-result-dom.html`：将仓库作为静态 HTTP 目录提供服务后打开该页面，页面会加载实际的 `test-tools.js`，显示各项 PASS / FAIL。覆盖上述三种定位结构、短结果、同步快速返回、瞬时忙碌、相同终态、调试残留以及旧结果保护。它使用模拟 DOM 和执行行为，不连接力扣服务器。
 
-`providers.mjs` 负责 API 配置和协议；`model-settings.mjs` 负责模型 UI；`companion/` 提供订阅连接；其他界面、页面读取和对话模块延续 0.4。第三方源码来源、版本、改动与许可证见 [companion/THIRD_PARTY.md](companion/THIRD_PARTY.md) 及 `vendor/`。
+验证分层：自动测试覆盖工具协议、任务调度、硬超时、按钮替换、提交与运行分流、旧结果拒绝、代码版本和同题提交路由变化；本地浏览器集成测试使用实际的内容脚本、编辑器桥接和 DOM 适配器，但模型服务与力扣判题服务器是模拟的。**没有使用真实 DeepSeek 密钥、没有在用户已登录的 Edge 力扣页面完成真实提交判题验证。自动测试通过或模拟 Accepted 都不代表真实提交已验证可用。** 0.5 的真实 ChatGPT 授权与推理也尚未经本机端到端验证。
 
-官方参考：[Edge 本地加载](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading) · [OpenAI 订阅授权](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) · [订阅模型和推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
+`agent.mjs` 负责 DeepSeek 工具协议与循环；`page-tools.mjs` 绑定活动题目、调用超时与中断；`test-tools.js` 负责实际 DOM 控件、后台执行任务与判定；`page-bridge.js` / `content.js` 负责编辑器读写与消息路由；`agent-ui.mjs` 展示工具记录、诊断与撤销；`providers.mjs`、`model-settings.mjs` 和 `companion/` 提供模型与订阅连接。第三方源码来源、版本、改动与许可证见 [companion/THIRD_PARTY.md](companion/THIRD_PARTY.md) 及 `vendor/`。
+
+官方参考：[DeepSeek 工具调用](https://api-docs.deepseek.com/zh-cn/guides/tool_calls/) · [深度思考工具字段回传](https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/) · [Edge 本地加载](https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading) · [OpenAI 订阅授权](https://developers.openai.com/siwc/token-sharing-open-source/sign-in) · [订阅模型和推理](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)
